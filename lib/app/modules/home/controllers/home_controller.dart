@@ -324,12 +324,22 @@ class HomeController extends GetxController {
     required String data,
     required String textLine1,
     required String textLine2,
-    double qrSize = 150.0,       // ukuran QR
-    double textWidth = 100.0,    // area teks (kiri)
-    double padding = 12.0,       // jarak antara teks dan QR
-    double fontSize = 40.0,      // ukuran font teks
+    double qrSize = 150.0,          // ukuran QR
+    double textWidth = 100.0,       // area teks utama
+    double timestampWidth = 120.0,  // area timestamp
+    double padding = 12.0,          // jarak antar elemen
+    double fontSize = 40.0,         // ukuran font teks utama
+    double timeFontSize = 24.0,     // ukuran font jam
+    double dateFontSize = 24.0,     // ukuran font tanggal
   }) async {
-    final totalWidth = (textWidth + padding + qrSize).toInt();
+    // --- Buat timestamp sekarang ---
+    final now = DateTime.now();
+    final shortYear = now.year.toString().substring(2);
+    final timeStr = "${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}";
+    final dateStr = "${now.day.toString().padLeft(2, '0')}/${now.month.toString().padLeft(2, '0')}/${shortYear}";
+
+    // Hitung total lebar canvas
+    final totalWidth = (timestampWidth + padding + textWidth + padding + qrSize).toInt();
     final totalHeight = qrSize.toInt();
 
     final recorder = ui.PictureRecorder();
@@ -342,10 +352,46 @@ class HomeController extends GetxController {
       bgPaint,
     );
 
-    // --- Gambar teks di kiri ---
+    // --- Gambar timestamp (jam besar, tanggal kecil) ---
+    final tsSpan = TextSpan(
+      children: [
+        TextSpan(
+          text: "$dateStr\n",
+          style: TextStyle(
+            color: Colors.black,
+            fontSize: dateFontSize,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        TextSpan(
+          text: timeStr,
+          style: TextStyle(
+            color: Colors.black87,
+            fontSize: timeFontSize,
+            fontWeight: FontWeight.normal,
+          ),
+        ),
+      ],
+    );
+
+    final tsPainter = TextPainter(
+      text: tsSpan,
+      textAlign: TextAlign.center,
+      textDirection: TextDirection.ltr,
+    );
+    tsPainter.layout(minWidth: 0, maxWidth: timestampWidth);
+    final offsetXTs = (timestampWidth - tsPainter.width) / 2;
+    final offsetYTs = (totalHeight - tsPainter.height) / 2;
+    tsPainter.paint(canvas, Offset(offsetXTs, offsetYTs));
+
+    // --- Gambar textLine1 + textLine2 ---
     final textSpan = TextSpan(
       text: '$textLine1\n$textLine2',
-      style: TextStyle(color: Colors.black, fontSize: fontSize, fontWeight: FontWeight.bold),
+      style: TextStyle(
+        color: Colors.black,
+        fontSize: fontSize,
+        fontWeight: FontWeight.bold,
+      ),
     );
     final textPainter = TextPainter(
       text: textSpan,
@@ -353,27 +399,28 @@ class HomeController extends GetxController {
       textDirection: TextDirection.ltr,
     );
     textPainter.layout(minWidth: 0, maxWidth: textWidth);
-    final offsetXText = (textWidth - textPainter.width) / 2;   // center horizontal
-    final offsetYText = (totalHeight - textPainter.height) / 2; // center vertical
+    final offsetXText = timestampWidth + padding + (textWidth - textPainter.width) / 2;
+    final offsetYText = (totalHeight - textPainter.height) / 2;
     textPainter.paint(canvas, Offset(offsetXText, offsetYText));
 
-    // --- Gambar QR di kanan ---
+    // --- Gambar QR ---
     final qrPainter = QrPainter(
       data: data,
       version: QrVersions.auto,
       gapless: true,
     );
 
-    // Geser canvas ke kanan sebelum menggambar QR
     canvas.save();
-    canvas.translate(textWidth + padding, 0);
+    canvas.translate(timestampWidth + padding + textWidth + padding, 0);
     qrPainter.paint(canvas, Size(qrSize, qrSize));
     canvas.restore();
 
-    // --- Render menjadi image & bytes ---
+    // --- Render ke image & bytes ---
     final picture = recorder.endRecording();
     final ui.Image img = await picture.toImage(totalWidth, totalHeight);
     final byteData = await img.toByteData(format: ui.ImageByteFormat.png);
     return byteData!.buffer.asUint8List();
   }
+
+
 }
